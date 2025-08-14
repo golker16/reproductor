@@ -1,0 +1,45 @@
+name: Build EXE (Windows onedir)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Check assets
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "assets\app.ico")) { Write-Error "Falta assets\app.ico (icono del .exe)"; exit 1 }
+          if (-not (Test-Path "assets\app.png")) { Write-Error "Falta assets\app.png (icono de la ventana)"; exit 1 }
+
+      - name: Build (onedir)
+        run: |
+          pyinstaller --noconfirm --windowed --onedir ^
+            --name "MusicPlayer" ^
+            --icon "assets\app.ico" ^
+            --collect-all PySide6 ^
+            --collect-all shiboken6 ^
+            --add-data "assets;assets" ^
+            app.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-player-dist
+          path: dist/
