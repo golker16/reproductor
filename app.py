@@ -1,5 +1,4 @@
 import sys
-import os
 import random
 from pathlib import Path
 
@@ -8,9 +7,10 @@ from PySide6.QtGui import QIcon, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QTableWidget, QTableWidgetItem, QPushButton, QHeaderView, QToolButton,
-    QLineEdit
+    QLineEdit, QAbstractItemView
 )
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+
 
 # ---------------------------------------------
 # Utilidades de paths (dev vs PyInstaller onedir)
@@ -26,6 +26,7 @@ def asset_path(name: str) -> Path:
 def canciones_dir() -> Path:
     return base_dir() / "canciones"
 
+
 # ---------------------------------------------
 # Parsing de nombre de archivo -> (artista, canción)
 # Espera formato: "Artista - Canción.ext"
@@ -37,21 +38,23 @@ def parse_nombre_archivo(filename: str):
         return artista.strip(), cancion.strip()
     return "(Desconocido)", name.strip()
 
+
 # Archivos de audio soportados
 EXTS = {".mp3", ".wav", ".m4a", ".aac", ".wma", ".ogg"}
+
 
 class MusicPlayer(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Reproductor — Gabriel Golker")
 
-        # Ícono de ventana: app.png
+        # Ícono de ventana: assets/app.png
         icon_png = asset_path("app.png")
         if icon_png.exists():
             self.setWindowIcon(QIcon(str(icon_png)))
 
         # Datos y estado
-        self.tracks = []           # lista de dicts: {path, artista, cancion}
+        self.tracks = []           # dicts: {path, artista, cancion}
         self.current_index = -1
         self.random_mode = False
         self.random_queue = []     # cola de índices para modo random
@@ -65,7 +68,7 @@ class MusicPlayer(QMainWindow):
         self.player = QMediaPlayer()
         self.player.setAudioOutput(self.audio)
 
-        # Reaccionar al final del tema
+        # Ir al siguiente al terminar
         self.player.mediaStatusChanged.connect(self._on_media_status_changed)
 
         # Cargar canciones
@@ -96,8 +99,10 @@ class MusicPlayer(QMainWindow):
         self.table = QTableWidget(0, 2)
         self.table.setHorizontalHeaderLabels(["Artista", "Canción"])
         self.table.verticalHeader().setVisible(False)
-        self.table.setSelectionBehavior(self.table.SelectRows)
-        self.table.setEditTriggers(self.table.NoEditTriggers)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        # Si quieres selección de una sola fila:
+        # self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(True)
         header = self.table.horizontalHeader()
@@ -163,13 +168,13 @@ class MusicPlayer(QMainWindow):
                     "artista": artista,
                     "cancion": cancion
                 })
-        # Orden base: por artista, luego por canción
+        # Orden base: por artista, luego canción
         self.tracks.sort(key=lambda t: (t["artista"].lower(), t["cancion"].lower()))
         self._refresh_view()
 
         if not self.tracks:
             self.statusBar().showMessage(
-                "No se encontraron canciones. Coloca tus archivos en la carpeta 'canciones' junto al .exe/.py",
+                "No se encontraron canciones. Pon tus archivos en 'canciones' junto al .exe/.py",
                 8000
             )
 
@@ -181,7 +186,7 @@ class MusicPlayer(QMainWindow):
         self._refresh_view()
 
     def _filtered_indices(self):
-        """Devuelve los índices (sobre self.tracks) que pasan el filtro actual."""
+        """Índices de self.tracks que pasan el filtro actual."""
         if not self.search_text:
             return list(range(len(self.tracks)))
         q = self.search_text.lower()
@@ -192,11 +197,11 @@ class MusicPlayer(QMainWindow):
         return indices
 
     def _visible_pool_indices(self):
-        """Índices (self.tracks) según el orden visible actual en la tabla."""
+        """Índices (self.tracks) en el orden visible actual de la tabla."""
         rows = self.table.rowCount()
         pool = []
         for r in range(rows):
-            item = self.table.item(r, 0)  # columna artista
+            item = self.table.item(r, 0)  # artista
             if not item:
                 continue
             idx = item.data(Qt.UserRole)
@@ -206,14 +211,13 @@ class MusicPlayer(QMainWindow):
 
     def _refresh_view(self):
         indices = self._filtered_indices()
-        # Construimos filas según el filtro actual
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(indices))
         for row, idx in enumerate(indices):
             t = self.tracks[idx]
             it_artist = QTableWidgetItem(t["artista"])
             it_song = QTableWidgetItem(t["cancion"])
-            # Guardamos el índice real en UserRole para mapear clics
+            # Guardamos el índice real en UserRole
             it_artist.setData(Qt.UserRole, idx)
             it_song.setData(Qt.UserRole, idx)
             self.table.setItem(row, 0, it_artist)
@@ -248,7 +252,7 @@ class MusicPlayer(QMainWindow):
                         nxt = pool[0]
                     self._play_index(nxt)
                 else:
-                    # Empieza por el primero visible (respeta filtro + orden actual)
+                    # Empieza por el primero visible (filtro + orden actual)
                     pool = self._visible_pool_indices() or list(range(len(self.tracks)))
                     self._play_index(pool[0])
             else:
@@ -360,3 +364,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
