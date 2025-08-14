@@ -1,8 +1,8 @@
-name: Build EXE (Windows onedir)
+name: Build Windows EXE (onedir)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -10,36 +10,62 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 0
 
-      - name: Set up Python
+      - name: Check icons exist
+        shell: pwsh
+        run: |
+          if (-not (Test-Path ".\assets\app.ico")) {
+            Write-Error "Falta .\assets\app.ico (icono del .exe)."
+            exit 1
+          }
+          if (-not (Test-Path ".\assets\app.png")) {
+            Write-Error "Falta .\assets\app.png (icono de la ventana)."
+            exit 1
+          }
+          $ico = Get-Item ".\assets\app.ico"
+          $png = Get-Item ".\assets\app.png"
+          Write-Host ("Icono EXE: {0} ({1} bytes)" -f $ico.FullName, $ico.Length)
+          Write-Host ("Icono ventana: {0} ({1} bytes)" -f $png.FullName, $png.Length)
+
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
-
-      - name: Check assets
         shell: pwsh
         run: |
-          if (-not (Test-Path "assets\app.ico")) { Write-Error "Falta assets\app.ico (icono del .exe)"; exit 1 }
-          if (-not (Test-Path "assets\app.png")) { Write-Error "Falta assets\app.png (icono de la ventana)"; exit 1 }
+          python -m pip install --upgrade pip wheel setuptools
+          pip install -r requirements.txt
+          pip install "pyinstaller>=6.10,<7"
 
-      - name: Build (onedir)
+      - name: Build (PyInstaller onedir)
+        shell: pwsh
         run: |
-          pyinstaller --noconfirm --windowed --onedir ^
-            --name "MusicPlayer" ^
-            --icon "assets\app.ico" ^
-            --collect-all PySide6 ^
-            --collect-all shiboken6 ^
-            --add-data "assets;assets" ^
-            app.py
+          $icoAbs = (Resolve-Path ".\assets\app.ico").Path
+          $appAbs = (Resolve-Path ".\app.py").Path
+          pyinstaller `
+            --noconfirm `
+            --windowed `
+            --onedir `
+            --noupx `
+            --icon "$icoAbs" `
+            --collect-all PySide6 `
+            --collect-all shiboken6 `
+            --add-data "assets;assets" `
+            "$appAbs"
+
+          Write-Host "Built files:"
+          Get-ChildItem -Recurse .\dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: music-player-dist
-          path: dist/
+          name: dist
+          path: dist
+
